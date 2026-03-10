@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vermogen — Portfolio Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { background: #0a0f1e; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useCallback } = React;
+
+
+const GOOGLE_FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');`;
+
+const styles = `
+  ${GOOGLE_FONTS}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #0a0f1e;
+    --navy2: #111827;
+    --navy3: #1a2235;
+    --navy4: #243047;
+    --gold: #c9a84c;
+    --gold2: #e8c97a;
+    --gold3: #f5e0a0;
+    --silver: #94a3b8;
+    --silver2: #cbd5e1;
+    --green: #22c55e;
+    --red: #ef4444;
+    --text: #e2e8f0;
+  }
+  body { background: var(--navy); font-family: 'DM Sans', sans-serif; color: var(--text); }
+  .app { min-height: 100vh; background: var(--navy); }
+  .grain { position: fixed; inset: 0; pointer-events: none; opacity: 0.03; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E"); z-index: 9999; }
+
+  /* HEADER */
+  .header { 
+    background: linear-gradient(135deg, var(--navy2) 0%, var(--navy3) 100%);
+    border-bottom: 1px solid rgba(201,168,76,0.2);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+  .logo { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--gold); letter-spacing: 0.05em; }
+  .logo span { color: var(--silver); font-size: 0.75rem; font-family: 'DM Mono', monospace; display: block; letter-spacing: 0.15em; font-weight: 300; }
+  .header-right { display: flex; align-items: center; gap: 1rem; }
+  .live-badge { 
+    display: flex; align-items: center; gap: 0.4rem;
+    background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3);
+    padding: 0.3rem 0.75rem; border-radius: 2rem;
+    font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--green);
+    letter-spacing: 0.1em;
+  }
+  .live-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.2)} }
+
+  /* NAV */
+  .nav { 
+    display: flex; gap: 0.25rem;
+    background: rgba(255,255,255,0.02);
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .nav-btn {
+    padding: 0.4rem 1rem; border-radius: 0.35rem; border: none; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 500; letter-spacing: 0.03em;
+    transition: all 0.2s;
+    background: transparent; color: var(--silver);
+  }
+  .nav-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+  .nav-btn.active { background: var(--gold); color: var(--navy); font-weight: 600; }
+
+  /* MAIN */
+  .main { padding: 2rem; max-width: 1400px; margin: 0 auto; }
+
+  /* SUMMARY CARDS */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .summary-card {
+    background: linear-gradient(135deg, var(--navy3) 0%, var(--navy4) 100%);
+    border: 1px solid rgba(201,168,76,0.15);
+    border-radius: 1rem; padding: 1.5rem;
+    position: relative; overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .summary-card:hover { transform: translateY(-2px); border-color: rgba(201,168,76,0.35); }
+  .summary-card::before {
+    content: ''; position: absolute; top: 0; right: 0;
+    width: 100px; height: 100px;
+    background: radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%);
+  }
+  .card-icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+  .card-label { font-size: 0.72rem; color: var(--silver); letter-spacing: 0.1em; text-transform: uppercase; font-family: 'DM Mono', monospace; margin-bottom: 0.4rem; }
+  .card-value { font-family: 'Playfair Display', serif; font-size: 1.6rem; color: var(--gold2); font-weight: 600; }
+  .card-sub { font-size: 0.75rem; color: var(--silver); margin-top: 0.3rem; font-family: 'DM Mono', monospace; }
+  .card-change { font-size: 0.8rem; font-family: 'DM Mono', monospace; font-weight: 500; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+
+  /* SECTION */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .section-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--gold2); display: flex; align-items: center; gap: 0.5rem; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(201,168,76,0.3), transparent); margin-left: 0.75rem; width: 120px; }
+  .add-btn {
+    padding: 0.5rem 1.1rem; background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold); border-radius: 0.5rem; cursor: pointer; font-size: 0.8rem;
+    font-family: 'DM Sans', sans-serif; font-weight: 500; transition: all 0.2s;
+  }
+  .add-btn:hover { background: rgba(201,168,76,0.2); border-color: var(--gold); }
+
+  /* TABLE */
+  .table-wrap { background: var(--navy3); border: 1px solid rgba(255,255,255,0.07); border-radius: 1rem; overflow: hidden; margin-bottom: 2rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th { 
+    padding: 0.75rem 1.25rem; text-align: left; 
+    font-family: 'DM Mono', monospace; font-size: 0.68rem; font-weight: 500;
+    color: var(--silver); letter-spacing: 0.12em; text-transform: uppercase;
+    background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  td { padding: 1rem 1.25rem; font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.025); }
+  .ticker { font-family: 'DM Mono', monospace; font-weight: 500; color: var(--gold2); font-size: 0.85rem; }
+  .mono { font-family: 'DM Mono', monospace; font-size: 0.85rem; }
+  .action-btn { 
+    padding: 0.3rem 0.7rem; border-radius: 0.4rem; border: 1px solid rgba(239,68,68,0.3);
+    background: rgba(239,68,68,0.08); color: #ef4444; font-size: 0.75rem; cursor: pointer;
+    transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+  }
+  .action-btn:hover { background: rgba(239,68,68,0.2); }
+
+  /* MODAL */
+  .modal-overlay { 
+    position: fixed; inset: 0; background: rgba(0,0,10,0.8); z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s;
+  }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  .modal {
+    background: var(--navy2); border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 1.25rem; padding: 2rem; width: 100%; max-width: 440px;
+    animation: slideUp 0.25s;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--gold2); margin-bottom: 1.5rem; }
+  .form-group { margin-bottom: 1rem; }
+  .form-label { font-size: 0.75rem; color: var(--silver); letter-spacing: 0.08em; text-transform: uppercase; font-family: 'DM Mono', monospace; margin-bottom: 0.4rem; display: block; }
+  .form-input {
+    width: 100%; padding: 0.65rem 0.9rem;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 0.5rem; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+    transition: border-color 0.2s; outline: none;
+  }
+  .form-input:focus { border-color: rgba(201,168,76,0.5); background: rgba(255,255,255,0.07); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .modal-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+  .btn-primary {
+    flex: 1; padding: 0.7rem; background: var(--gold); color: var(--navy);
+    border: none; border-radius: 0.5rem; font-weight: 600; font-size: 0.9rem;
+    cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+  }
+  .btn-primary:hover { background: var(--gold2); }
+  .btn-secondary {
+    flex: 1; padding: 0.7rem; background: transparent; color: var(--silver);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; font-size: 0.9rem;
+    cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+  /* LOADING */
+  .loading-spinner { 
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(201,168,76,0.3); border-top-color: var(--gold);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .property-card {
+    background: var(--navy3); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 1rem; padding: 0; position: relative;
+    transition: border-color 0.2s;
+    overflow: hidden;
+  }
+  .property-card:hover { border-color: rgba(201,168,76,0.25); }
+  .property-card--expanded { border-color: rgba(201,168,76,0.3); }
+  .property-clickable {
+    padding: 1.5rem; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .property-clickable:hover { background: rgba(255,255,255,0.02); }
+  .property-expand-hint {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 0.85rem; padding-top: 0.65rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.72rem; color: var(--silver); font-family: 'DM Mono', monospace;
+  }
+  .expand-chevron {
+    font-size: 1rem; color: var(--gold); transition: transform 0.25s ease;
+    display: inline-block;
+  }
+  .loanparts-section {
+    padding: 0 1.5rem 1.5rem;
+    border-top: 1px solid rgba(201,168,76,0.15);
+    background: rgba(0,0,0,0.15);
+    animation: fadeSlideDown 0.2s ease;
+  }
+  @keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .property-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--gold2); margin-bottom: 0.25rem; }
+  .property-address { font-size: 0.78rem; color: var(--silver); margin-bottom: 1rem; }
+  .property-row { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .property-row:last-of-type { border-bottom: none; }
+  .prop-label { font-size: 0.75rem; color: var(--silver); font-family: 'DM Mono', monospace; }
+  .prop-value { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: var(--text); }
+  .equity-bar { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; margin-top: 1rem; overflow: hidden; }
+  .equity-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold2)); border-radius: 3px; transition: width 0.5s ease; }
+  .equity-label { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--silver); font-family: 'DM Mono', monospace; margin-top: 0.4rem; }
+  .delete-prop { 
+    position: relative; top: auto; right: auto;
+    background: none; border: none; color: rgba(239,68,68,0.5); cursor: pointer; font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+  .delete-prop:hover { color: #ef4444; }
+  .edit-prop {
+    background: none; border: none; color: rgba(201,168,76,0.5); cursor: pointer; font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+  .edit-prop:hover { color: var(--gold2); }
+  .edit-btn { 
+    padding: 0.3rem 0.7rem; border-radius: 0.4rem; border: 1px solid rgba(201,168,76,0.3);
+    background: rgba(201,168,76,0.08); color: var(--gold); font-size: 0.75rem; cursor: pointer;
+    transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+  }
+  .edit-btn:hover { background: rgba(201,168,76,0.2); }
+
+  .modal-section-label {
+    font-size: 0.68rem; color: var(--gold); letter-spacing: 0.12em; text-transform: uppercase;
+    font-family: 'DM Mono', monospace; margin: 1rem 0 0.5rem;
+    padding-bottom: 0.35rem; border-bottom: 1px solid rgba(201,168,76,0.15);
+  }
+  .loanparts-section { margin-top: 1rem; }
+  .loanparts-title { font-size: 0.7rem; color: var(--silver); letter-spacing: 0.1em; text-transform: uppercase; font-family: 'DM Mono', monospace; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; }
+  .loanpart {
+    background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 0.5rem; padding: 0.65rem 0.75rem; margin-bottom: 0.4rem;
+    position: relative;
+  }
+  .loanpart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; }
+  .loanpart-label { font-size: 0.82rem; font-weight: 500; color: var(--text); }
+  .loanpart-type { font-size: 0.65rem; font-family: 'DM Mono', monospace; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.2); padding: 0.15rem 0.45rem; border-radius: 1rem; }
+  .loanpart-row { display: flex; justify-content: space-between; font-size: 0.75rem; font-family: 'DM Mono', monospace; color: var(--silver); margin-top: 0.15rem; }
+  .loanpart-row span:last-child { color: var(--text); }
+  .loanpart-actions { display: flex; gap: 0.3rem; }
+  .add-loanpart-btn {
+    width: 100%; padding: 0.45rem; background: rgba(201,168,76,0.06); border: 1px dashed rgba(201,168,76,0.25);
+    color: var(--gold); border-radius: 0.5rem; cursor: pointer; font-size: 0.78rem;
+    font-family: 'DM Sans', sans-serif; transition: all 0.2s; margin-top: 0.4rem;
+  }
+  .add-loanpart-btn:hover { background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.4); }
+  .metals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .metal-card {
+    background: var(--navy3); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 1rem; padding: 1.25rem; text-align: center;
+    transition: transform 0.2s, border-color 0.2s; position: relative;
+  }
+  .metal-card:hover { transform: translateY(-2px); border-color: rgba(201,168,76,0.25); }
+  .metal-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .metal-name { font-family: 'Playfair Display', serif; color: var(--gold2); font-size: 1rem; margin-bottom: 0.25rem; }
+  .metal-amount { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--silver); margin-bottom: 0.5rem; }
+  .metal-value { font-family: 'Playfair Display', serif; font-size: 1.3rem; color: var(--text); }
+  .metal-price { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--silver); margin-top: 0.25rem; }
+
+  /* SAVINGS */
+  .savings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .saving-card {
+    background: var(--navy3); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 1rem; padding: 1.25rem; position: relative;
+    transition: transform 0.2s;
+  }
+  .saving-card:hover { transform: translateY(-2px); }
+  .saving-name { font-weight: 600; color: var(--text); margin-bottom: 0.25rem; }
+  .saving-bank { font-size: 0.75rem; color: var(--silver); font-family: 'DM Mono', monospace; margin-bottom: 0.75rem; }
+  .saving-amount { font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--gold2); }
+  .saving-rate { font-size: 0.75rem; color: var(--green); font-family: 'DM Mono', monospace; margin-top: 0.25rem; }
+
+  /* CHART BAR */
+  .allocation-section { background: var(--navy3); border: 1px solid rgba(255,255,255,0.07); border-radius: 1rem; padding: 1.5rem; margin-bottom: 2rem; }
+  .allocation-title { font-family: 'Playfair Display', serif; color: var(--gold2); font-size: 1rem; margin-bottom: 1.25rem; }
+  .alloc-bar { display: flex; height: 20px; border-radius: 10px; overflow: hidden; gap: 2px; margin-bottom: 1rem; }
+  .alloc-segment { height: 100%; transition: flex 0.5s ease; border-radius: 2px; }
+  .alloc-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-family: 'DM Mono', monospace; color: var(--silver); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  /* EMPTY STATE */
+  .empty { text-align: center; padding: 3rem; color: var(--silver); font-size: 0.9rem; }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.4; }
+  
+  /* REFRESH BTN */
+  .refresh-btn {
+    padding: 0.4rem 0.9rem; background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2);
+    color: var(--gold); border-radius: 0.5rem; cursor: pointer; font-size: 0.75rem;
+    font-family: 'DM Mono', monospace; transition: all 0.2s; display: flex; align-items: center; gap: 0.4rem;
+  }
+  .refresh-btn:hover { background: rgba(201,168,76,0.15); }
+  .refresh-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* INLINE KOERS BEWERKEN */
+  .price-cell-plain {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+  }
+  .price-live { color: var(--text); }
+  .price-manual { color: var(--gold2); }
+  .price-fallback { color: var(--silver); }
+  .price-badge { font-size: 0.65rem; opacity: 0.55; }
+  .price-input {
+    width: 90px; padding: 0.2rem 0.4rem;
+    background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 0.3rem; color: var(--gold2); font-family: 'DM Mono', monospace;
+    font-size: 0.85rem; outline: none;
+  }
+
+  /* KLIKBARE TABELRIJEN */
+  .stock-row { cursor: pointer; transition: background 0.15s; }
+  .stock-row:hover td { background: rgba(201,168,76,0.04) !important; }
+  .stock-row--active td { background: rgba(201,168,76,0.07) !important; }
+
+  .stock-drawer-row td { padding: 0 !important; border-bottom: none !important; }
+  .stock-drawer {
+    border-top: 1px solid rgba(201,168,76,0.2);
+    border-bottom: 1px solid rgba(201,168,76,0.1);
+    background: rgba(201,168,76,0.03);
+    padding: 1rem 1.25rem 1.25rem;
+    animation: fadeSlideDown 0.18s ease;
+  }
+  .stock-drawer-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.85rem;
+  }
+  .drawer-close {
+    background: none; border: none; color: var(--silver); cursor: pointer;
+    font-size: 0.9rem; transition: color 0.15s; padding: 0.2rem 0.4rem;
+  }
+  .drawer-close:hover { color: var(--text); }
+  .drawer-actions { display: flex; gap: 2rem; flex-wrap: wrap; }
+  .drawer-section { display: flex; flex-direction: column; gap: 0.5rem; }
+  .drawer-label {
+    font-size: 0.68rem; color: var(--silver); text-transform: uppercase;
+    letter-spacing: 0.1em; font-family: 'DM Mono', monospace;
+  }
+  .drawer-btn {
+    padding: 0.4rem 0.9rem; border-radius: 0.4rem; cursor: pointer;
+    font-size: 0.78rem; font-family: 'DM Sans', sans-serif; font-weight: 500;
+    transition: all 0.15s;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--silver2);
+  }
+  .drawer-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+  .drawer-btn--gold {
+    background: rgba(201,168,76,0.1); border-color: rgba(201,168,76,0.3); color: var(--gold);
+  }
+  .drawer-btn--gold:hover { background: rgba(201,168,76,0.2); }
+  .drawer-btn--red {
+    background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); color: var(--red);
+  }
+  .drawer-btn--red:hover { background: rgba(239,68,68,0.18); }
+
+  @media (max-width: 640px) {
+    .main { padding: 1rem; }
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+    .header { padding: 0 1rem; }
+    .logo span { display: none; }
+    .nav-btn { padding: 0.35rem 0.6rem; font-size: 0.72rem; }
+  }
+`;
+
+const fmt = (n) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(n);
+const fmtNum = (n, dec = 2) => n?.toFixed(dec) ?? "—";
+
+// ─── INITIAL DATA ─────────────────────────────────────────────────────────────
+const initialStocks = [
+  { id: 1, ticker: "ASML", name: "ASML Holding", shares: 5, avgCost: 680 },
+  { id: 2, ticker: "RDSA", name: "Shell", shares: 100, avgCost: 28.5 },
+  { id: 3, ticker: "BESI", name: "BE Semiconductor", shares: 20, avgCost: 115 },
+];
+const initialProperties = [
+  { id: 1, name: "Appartement Amsterdam", address: "Jordaan, Amsterdam", value: 450000, rentalIncome: 0, loanParts: [
+    { id: 101, partNumber: "1", label: "Annuïteit", type: "annuiteit", originalPrincipal: 180000, remainingPrincipal: 165000, principal: 165000, rate: 3.5, riskSurcharge: 0.3, grossMonthlyInterest: 481, monthlyPayment: 481, originalFixedRatePeriod: 10, remainingFixedRatePeriod: 7, fixedRateEndDate: "2031-06-01", deedDate: "2021-06-01", endDate: "2051-06-01" },
+    { id: 102, partNumber: "2", label: "Aflossingsvrij", type: "aflossingsvrij", originalPrincipal: 100000, remainingPrincipal: 100000, principal: 100000, rate: 2.9, riskSurcharge: 0, grossMonthlyInterest: 242, monthlyPayment: 242, originalFixedRatePeriod: 20, remainingFixedRatePeriod: 15, fixedRateEndDate: "2039-06-01", deedDate: "2021-06-01", endDate: "2051-06-01" },
+  ]},
+  { id: 2, name: "Woning Apeldoorn", address: "Apeldoorn, Gelderland", value: 320000, rentalIncome: 1200, loanParts: [
+    { id: 201, partNumber: "1", label: "Lineair", type: "lineair", originalPrincipal: 180000, remainingPrincipal: 162000, principal: 162000, rate: 2.8, riskSurcharge: 0.2, grossMonthlyInterest: 378, monthlyPayment: 980, originalFixedRatePeriod: 10, remainingFixedRatePeriod: 4, fixedRateEndDate: "2028-03-01", deedDate: "2020-03-01", endDate: "2045-03-01" },
+  ]},
+];
+const initialSavings = [
+  { id: 1, name: "Spaarrekening", bank: "Rabobank", amount: 25000, rate: 2.5 },
+  { id: 2, name: "Noodfonds", bank: "ING", amount: 8000, rate: 1.8 },
+];
+const initialMetals = [
+  { id: 1, type: "gold", name: "Goud", icon: "🥇", grams: 50, pricePerGram: null },
+  { id: 2, type: "silver", name: "Zilver", icon: "🥈", grams: 500, pricePerGram: null },
+];
+
+// ─── FETCH LIVE PRICES via Anthropic API met web search ──────────────────────
+// Web search vereist een multi-turn loop:
+// 1. Eerste call → model stuurt tool_use blocks
+// 2. Wij sturen tool_result terug (Anthropic verwerkt de search zelf)
+// 3. Model geeft uiteindelijk text terug met de koersen
+
+async function fetchLivePrices(tickers) {
+  const today = new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+
+  const systemPrompt = `Je bent een financieel data-assistent. Gebruik web search om actuele beurskoersen op te halen. 
+Geef je eindantwoord ALTIJD als puur JSON object zonder markdown of uitleg, exact dit formaat:
+{"TICKER": 123.45, "gold_eur_gram": 88.5, "silver_eur_gram": 0.97}`;
+
+  const userMessage = `Vandaag is ${today}. Zoek de huidige beurskoersen op (in EUR) voor: ${tickers.join(", ")}.
+Zoek ook: goudprijs EUR per gram, zilverprijs EUR per gram.
+Antwoord ALLEEN met een JSON object, geen tekst ervoor of erna.`;
+
+  const messages = [{ role: "user", content: userMessage }];
+
+  let aborted = false;
+  const timeoutId = setTimeout(() => { aborted = true; }, 30000);
+
+  try {
+    let iterations = 0;
+    while (iterations < 6 && !aborted) {
+      iterations++;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          system: systemPrompt,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      messages.push({ role: "assistant", content: data.content });
+
+      if (data.stop_reason === "end_turn") {
+        const text = data.content.filter(b => b.type === "text").map(b => b.text).join("");
+        const match = text.match(/\{[^{}]+\}/);
+        if (!match) return {};
+        const parsed = JSON.parse(match[0]);
+        const clean = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === "number" && v > 0) clean[k] = v;
+        }
+        return clean;
+      }
+
+      if (data.stop_reason === "tool_use") {
+        const toolResults = data.content
+          .filter(b => b.type === "tool_use")
+          .map(b => ({
+            type: "tool_result",
+            tool_use_id: b.id,
+            content: "Search results will be provided by Anthropic's infrastructure.",
+          }));
+        if (toolResults.length === 0) break;
+        messages.push({ role: "user", content: toolResults });
+        continue;
+      }
+
+      break;
+    }
+    return {};
+  } catch (e) {
+    console.error("fetchLivePrices fout:", e);
+    return {};
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// ─── APP ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState("dashboard");
+  const [stocks, setStocks] = useState(initialStocks);
+  const [properties, setProperties] = useState(initialProperties);
+  const [savings, setSavings] = useState(initialSavings);
+  const [metals, setMetals] = useState(initialMetals);
+  const [prices, setPrices] = useState({});
+  const [manualPrices, setManualPrices] = useState({}); // handmatig ingevoerde koersen
+  const [editingPrice, setEditingPrice] = useState(null); // ticker die nu bewerkt wordt
+  const [loading, setLoading] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [priceError, setPriceError] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [loanPartModal, setLoanPartModal] = useState(null);
+
+  const loadPrices = useCallback(async () => {
+    setLoading(true);
+    setPriceError(false);
+    try {
+      const tickers = stocks.map(s => s.ticker);
+      const p = await fetchLivePrices(tickers);
+      const hasData = Object.keys(p).some(k => !["gold_eur_gram","silver_eur_gram"].includes(k));
+      setPrices(p);
+      setPriceError(!hasData);
+      if (Object.keys(p).length > 0) setLastUpdate(new Date());
+    } catch {
+      setPriceError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [stocks]);
+
+  useEffect(() => { loadPrices(); }, []);
+
+  const propMortgage = (p) => (p.loanParts || []).reduce((s, lp) => s + lp.principal, 0);
+  const propMonthly = (p) => (p.loanParts || []).reduce((s, lp) => s + lp.monthlyPayment, 0);
+  // Koers prioriteit: handmatig > live > kostprijs
+  const getPrice = (ticker, avgCost) =>
+    manualPrices[ticker] ?? prices[ticker] ?? avgCost;
+  const isManual = (ticker) => manualPrices[ticker] !== undefined;
+  const isLive = (ticker) => !isManual(ticker) && prices[ticker] !== undefined;
+
+  const stockValue = stocks.reduce((s, st) => s + getPrice(st.ticker, st.avgCost) * st.shares, 0);
+  const propertyEquity = properties.reduce((s, p) => s + (p.value - propMortgage(p)), 0);
+  const savingsTotal = savings.reduce((s, sv) => s + sv.amount, 0);
+  const metalsValue = metals.reduce((s, m) => {
+    const key = m.type === "gold" ? "gold_eur_gram" : "silver_eur_gram";
+    return s + m.grams * (prices[key] || (m.type === "gold" ? 85 : 0.95));
+  }, 0);
+  const totalWealth = stockValue + propertyEquity + savingsTotal + metalsValue;
+
+  const allocPct = (v) => totalWealth > 0 ? (v / totalWealth * 100).toFixed(1) : 0;
+
+  // ─── MODALS ────────────────────────────────────────────────────────────────
+  const Modal = ({ type, item, onClose }) => {
+    const isEdit = !!item;
+    const [form, setForm] = useState(() => {
+      if (!item) return {};
+      if (type === "stock") return { ticker: item.ticker, name: item.name, shares: String(item.shares), avgCost: String(item.avgCost) };
+      if (type === "property") return { name: item.name, address: item.address, value: String(item.value), rentalIncome: String(item.rentalIncome) };
+      if (type === "saving") return { name: item.name, bank: item.bank, amount: String(item.amount), rate: String(item.rate) };
+      if (type === "metal") return { metalType: item.type, grams: String(item.grams) };
+      return {};
+    });
+    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleSave = () => {
+      if (type === "stock") {
+        const { ticker, name, shares, avgCost } = form;
+        if (!ticker || !shares) return;
+        const updated = { ticker: ticker.toUpperCase(), name: name || ticker, shares: +shares, avgCost: +avgCost || 0 };
+        if (isEdit) setStocks(s => s.map(x => x.id === item.id ? { ...x, ...updated } : x));
+        else setStocks(s => [...s, { id: Date.now(), ...updated }]);
+      } else if (type === "property") {
+        const { name, address, value, rentalIncome } = form;
+        if (!name || !value) return;
+        const updated = { name, address: address || "", value: +value, rentalIncome: +rentalIncome || 0 };
+        if (isEdit) setProperties(p => p.map(x => x.id === item.id ? { ...x, ...updated } : x));
+        else setProperties(p => [...p, { id: Date.now(), loanParts: [], ...updated }]);
+      } else if (type === "saving") {
+        const { name, bank, amount, rate } = form;
+        if (!name || !amount) return;
+        const updated = { name, bank: bank || "", amount: +amount, rate: +rate || 0 };
+        if (isEdit) setSavings(s => s.map(x => x.id === item.id ? { ...x, ...updated } : x));
+        else setSavings(s => [...s, { id: Date.now(), ...updated }]);
+      } else if (type === "metal") {
+        const { metalType, grams } = form;
+        if (!metalType || !grams) return;
+        const meta = { gold: { name: "Goud", icon: "🥇" }, silver: { name: "Zilver", icon: "🥈" }, platinum: { name: "Platina", icon: "⚪" } };
+        const updated = { type: metalType, name: meta[metalType]?.name || metalType, icon: meta[metalType]?.icon || "🔩", grams: +grams };
+        if (isEdit) setMetals(m => m.map(x => x.id === item.id ? { ...x, ...updated } : x));
+        else setMetals(m => [...m, { id: Date.now(), ...updated }]);
+      }
+      onClose();
+    };
+
+    const addTitles = { stock: "Aandeel Toevoegen", property: "Vastgoed Toevoegen", saving: "Spaarrekening Toevoegen", metal: "Edelmetaal Toevoegen" };
+    const editTitles = { stock: "Aandeel Bewerken", property: "Vastgoed Bewerken", saving: "Spaarrekening Bewerken", metal: "Edelmetaal Bewerken" };
+    const titles = isEdit ? editTitles : addTitles;
+
+    const inp = (key, placeholder, typeAttr = "text", step) => (
+      <input className="form-input" type={typeAttr} placeholder={placeholder} step={step}
+        value={form[key] ?? ""} onChange={e => set(key, e.target.value)} />
+    );
+
+    return (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal">
+          <div className="modal-title">{titles[type]}</div>
+          {type === "stock" && <>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Ticker</label>{inp("ticker", "ASML")}</div>
+              <div className="form-group"><label className="form-label">Naam</label>{inp("name", "ASML Holding")}</div>
+            </div>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Aantal Aandelen</label>{inp("shares", "10", "number")}</div>
+              <div className="form-group"><label className="form-label">Gem. Kostprijs (€)</label>{inp("avgCost", "650", "number")}</div>
+            </div>
+          </>}
+          {type === "property" && <>
+            <div className="form-group"><label className="form-label">Naam</label>{inp("name", "Woning Amsterdam")}</div>
+            <div className="form-group"><label className="form-label">Adres</label>{inp("address", "Herengracht 123, Amsterdam")}</div>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Woningwaarde (€)</label>{inp("value", "350000", "number")}</div>
+              <div className="form-group"><label className="form-label">Huurinkomsten/mnd (€)</label>{inp("rentalIncome", "0", "number")}</div>
+            </div>
+            <p style={{ fontSize: "0.75rem", color: "var(--silver)", marginTop: "0.25rem" }}>Leningdelen voeg je toe via de vastgoedkaart na het opslaan.</p>
+          </>}
+          {type === "saving" && <>
+            <div className="form-group"><label className="form-label">Naam</label>{inp("name", "Spaarrekening")}</div>
+            <div className="form-group"><label className="form-label">Bank</label>{inp("bank", "ABN AMRO")}</div>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Saldo (€)</label>{inp("amount", "15000", "number")}</div>
+              <div className="form-group"><label className="form-label">Rente (%)</label>{inp("rate", "2.5", "number", "0.1")}</div>
+            </div>
+          </>}
+          {type === "metal" && <>
+            <div className="form-group">
+              <label className="form-label">Type</label>
+              <select className="form-input" value={form.metalType ?? ""} onChange={e => set("metalType", e.target.value)}>
+                <option value="">Selecteer...</option>
+                <option value="gold">Goud</option>
+                <option value="silver">Zilver</option>
+                <option value="platinum">Platina</option>
+              </select>
+            </div>
+            <div className="form-group"><label className="form-label">Gewicht (gram)</label>{inp("grams", "100", "number")}</div>
+          </>}
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={onClose}>Annuleren</button>
+            <button className="btn-primary" onClick={handleSave}>{isEdit ? "Opslaan" : "Toevoegen"}</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── CONFIRM DELETE MODAL ─────────────────────────────────────────────────
+  const ConfirmDelete = ({ type, id, name, onClose }) => {
+    const doDelete = () => {
+      if (type === "stock") setStocks(s => s.filter(x => x.id !== id));
+      else if (type === "property") setProperties(s => s.filter(x => x.id !== id));
+      else if (type === "saving") setSavings(s => s.filter(x => x.id !== id));
+      else if (type === "metal") setMetals(s => s.filter(x => x.id !== id));
+      onClose();
+    };
+    return (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal" style={{ maxWidth: 360 }}>
+          <div className="modal-title" style={{ color: "var(--red)" }}>Verwijderen?</div>
+          <p style={{ color: "var(--silver)", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
+            Weet je zeker dat je <strong style={{ color: "var(--text)" }}>{name}</strong> wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
+          </p>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={onClose}>Annuleren</button>
+            <button className="btn-primary" style={{ background: "var(--red)", color: "#fff" }} onClick={doDelete}>Verwijderen</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── LOAN PART MODAL ─────────────────────────────────────────────────────
+  const LoanPartModal = ({ propertyId, part, onClose }) => {
+    const isEdit = !!part;
+    const [form, setForm] = useState(() => part ? {
+      partNumber: part.partNumber ?? "",
+      label: part.label ?? "",
+      type: part.type ?? "annuiteit",
+      originalPrincipal: String(part.originalPrincipal ?? part.principal ?? ""),
+      remainingPrincipal: String(part.remainingPrincipal ?? part.principal ?? ""),
+      originalFixedRatePeriod: part.originalFixedRatePeriod ?? "",
+      remainingFixedRatePeriod: part.remainingFixedRatePeriod ?? "",
+      fixedRateEndDate: part.fixedRateEndDate ?? "",
+      rate: String(part.rate ?? ""),
+      riskSurcharge: String(part.riskSurcharge ?? ""),
+      grossMonthlyInterest: String(part.grossMonthlyInterest ?? ""),
+      deedDate: part.deedDate ?? "",
+      endDate: part.endDate ?? "",
+    } : { type: "annuiteit" });
+    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleSave = () => {
+      const { label, type, originalPrincipal, remainingPrincipal, rate, grossMonthlyInterest } = form;
+      if (!originalPrincipal) return;
+      const lp = {
+        partNumber: form.partNumber,
+        label: label || form.partNumber || "Leningdeel",
+        type,
+        originalPrincipal: +originalPrincipal || 0,
+        remainingPrincipal: +remainingPrincipal || +originalPrincipal || 0,
+        principal: +remainingPrincipal || +originalPrincipal || 0,
+        rate: +rate || 0,
+        riskSurcharge: +form.riskSurcharge || 0,
+        grossMonthlyInterest: +grossMonthlyInterest || 0,
+        monthlyPayment: +grossMonthlyInterest || 0,
+        originalFixedRatePeriod: form.originalFixedRatePeriod,
+        remainingFixedRatePeriod: form.remainingFixedRatePeriod,
+        fixedRateEndDate: form.fixedRateEndDate,
+        deedDate: form.deedDate,
+        endDate: form.endDate,
+      };
+      setProperties(ps => ps.map(p => {
+        if (p.id !== propertyId) return p;
+        const parts = p.loanParts || [];
+        if (isEdit) return { ...p, loanParts: parts.map(x => x.id === part.id ? { ...x, ...lp } : x) };
+        return { ...p, loanParts: [...parts, { id: Date.now(), ...lp }] };
+      }));
+      onClose();
+    };
+
+    const inp = (key, placeholder, typeAttr = "text", step) => (
+      <input className="form-input" type={typeAttr} placeholder={placeholder} step={step}
+        value={form[key] ?? ""} onChange={e => set(key, e.target.value)} />
+    );
+
+    return (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal" style={{ maxWidth: 500, maxHeight: "90vh", overflowY: "auto" }}>
+          <div className="modal-title">{isEdit ? "Leningdeel Bewerken" : "Leningdeel Toevoegen"}</div>
+
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Leningdeelnummer</label>{inp("partNumber", "1")}</div>
+            <div className="form-group">
+              <label className="form-label">Type</label>
+              <select className="form-input" value={form.type ?? "annuiteit"} onChange={e => set("type", e.target.value)}>
+                <option value="annuiteit">Annuïteit</option>
+                <option value="lineair">Lineair</option>
+                <option value="aflossingsvrij">Aflossingsvrij</option>
+                <option value="spaar">Spaarhypotheek</option>
+                <option value="belegging">Beleggingshypotheek</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group"><label className="form-label">Omschrijving (optioneel)</label>{inp("label", "bv. Deel 1 – Annuïteit")}</div>
+
+          <div className="modal-section-label">Hoofdsom</div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Oorspronkelijke hoofdsom (€)</label>{inp("originalPrincipal", "150000", "number")}</div>
+            <div className="form-group"><label className="form-label">Restant hoofdsom (€)</label>{inp("remainingPrincipal", "140000", "number")}</div>
+          </div>
+
+          <div className="modal-section-label">Rentevaste periode</div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Oorspronkelijke periode (jr)</label>{inp("originalFixedRatePeriod", "10", "number")}</div>
+            <div className="form-group"><label className="form-label">Resterende periode (jr)</label>{inp("remainingFixedRatePeriod", "7", "number")}</div>
+          </div>
+          <div className="form-group"><label className="form-label">Einddatum rentevaste periode</label>{inp("fixedRateEndDate", "", "date")}</div>
+
+          <div className="modal-section-label">Rente</div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Rentepercentage incl. risico-opslag (%)</label>{inp("rate", "3.50", "number", "0.01")}</div>
+            <div className="form-group"><label className="form-label">Risico-opslag (%)</label>{inp("riskSurcharge", "0.30", "number", "0.01")}</div>
+          </div>
+          <div className="form-group"><label className="form-label">Bruto rente per maand (€)</label>{inp("grossMonthlyInterest", "437", "number")}</div>
+
+          <div className="modal-section-label">Data</div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Aktedatum</label>{inp("deedDate", "", "date")}</div>
+            <div className="form-group"><label className="form-label">Einddatum</label>{inp("endDate", "", "date")}</div>
+          </div>
+
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={onClose}>Annuleren</button>
+            <button className="btn-primary" onClick={handleSave}>{isEdit ? "Opslaan" : "Toevoegen"}</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  const Dashboard = () => (
+    <>
+      <div className="summary-grid">
+        {[
+          { icon: "💼", label: "Totaal Vermogen", value: fmt(totalWealth), sub: "Netto vermogen" },
+          { icon: "📈", label: "Aandelen", value: fmt(stockValue), sub: `${stocks.length} posities`, change: stocks.reduce((s, st) => s + ((prices[st.ticker] ?? st.avgCost) - st.avgCost) * st.shares, 0) },
+          { icon: "🏠", label: "Vastgoed (equity)", value: fmt(propertyEquity), sub: `${properties.length} panden` },
+          { icon: "🏦", label: "Spaargeld", value: fmt(savingsTotal), sub: `${savings.length} rekeningen` },
+          { icon: "✨", label: "Edelmetalen", value: fmt(metalsValue), sub: `${metals.reduce((s, m) => s + m.grams, 0)}g totaal` },
+        ].map((c, i) => (
+          <div key={i} className="summary-card">
+            <div className="card-icon">{c.icon}</div>
+            <div className="card-label">{c.label}</div>
+            <div className="card-value">{c.value}</div>
+            {c.change !== undefined && (
+              <div className={`card-change ${c.change >= 0 ? "pos" : "neg"}`}>
+                {c.change >= 0 ? "▲" : "▼"} {fmt(Math.abs(c.change))}
+              </div>
+            )}
+            {c.sub && <div className="card-sub">{c.sub}</div>}
+          </div>
+        ))}
+      </div>
+
+      <div className="allocation-section">
+        <div className="allocation-title">Vermogensverdeling</div>
+        <div className="alloc-bar">
+          {[
+            { pct: +allocPct(stockValue), color: "#c9a84c" },
+            { pct: +allocPct(propertyEquity), color: "#60a5fa" },
+            { pct: +allocPct(savingsTotal), color: "#22c55e" },
+            { pct: +allocPct(metalsValue), color: "#a78bfa" },
+          ].map((seg, i) => (
+            <div key={i} className="alloc-segment" style={{ flex: seg.pct, background: seg.color }} />
+          ))}
+        </div>
+        <div className="alloc-legend">
+          {[
+            { color: "#c9a84c", label: `Aandelen ${allocPct(stockValue)}%` },
+            { color: "#60a5fa", label: `Vastgoed ${allocPct(propertyEquity)}%` },
+            { color: "#22c55e", label: `Spaargeld ${allocPct(savingsTotal)}%` },
+            { color: "#a78bfa", label: `Edelmetalen ${allocPct(metalsValue)}%` },
+          ].map((l, i) => (
+            <div key={i} className="legend-item">
+              <div className="legend-dot" style={{ background: l.color }} />
+              {l.label}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Top positions */}
+      <div className="section-header"><div className="section-title">📊 Top Posities</div></div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Aandeel</th><th>Koers</th><th>Aandelen</th><th>Waarde</th><th>P&L</th></tr></thead>
+          <tbody>
+            {stocks.slice(0, 5).map(s => {
+              const price = getPrice(s.ticker, s.avgCost);
+              const value = price * s.shares;
+              const pl = (price - s.avgCost) * s.shares;
+              const plPct = ((price - s.avgCost) / s.avgCost * 100);
+              return (
+                <tr key={s.id}>
+                  <td><span className="ticker">{s.ticker}</span><br /><span style={{ fontSize: "0.78rem", color: "var(--silver)" }}>{s.name}</span></td>
+                  <td className="mono">{loading ? <span className="loading-spinner" /> : fmt(price)}</td>
+                  <td className="mono">{s.shares}</td>
+                  <td className="mono">{fmt(value)}</td>
+                  <td className={`mono ${pl >= 0 ? "pos" : "neg"}`}>{fmt(pl)} ({fmtNum(plPct)}%)</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  // ─── STOCKS TAB ───────────────────────────────────────────────────────────
+  const Stocks = () => {
+    const [selectedStock, setSelectedStock] = useState(null);
+    const selected = stocks.find(s => s.id === selectedStock);
+    return (
+    <>
+      <div className="section-header">
+        <div className="section-title">📈 Aandelen Portfolio</div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button className="refresh-btn" onClick={loadPrices} disabled={loading}>
+            {loading ? <span className="loading-spinner" /> : "↺"} Koersen Bijwerken
+          </button>
+          <button className="add-btn" onClick={() => setModal({ type: "stock" })}>+ Toevoegen</button>
+        </div>
+      </div>
+      {(lastUpdate || priceError || loading) && (
+        <div style={{ fontSize: "0.72rem", fontFamily: "DM Mono", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          {loading
+            ? <span style={{ color: "var(--silver)" }}>⏳ Koersen ophalen…</span>
+            : priceError
+              ? <span style={{ color: "var(--red)" }}>⚠ Koersen ophalen mislukt — aandelen tonen kostprijzen als fallback.</span>
+              : <><span style={{ color: "var(--green)" }}>● Live</span><span style={{ color: "var(--silver)" }}>Bijgewerkt: {lastUpdate?.toLocaleTimeString("nl-NL")}</span><span style={{ color: "rgba(148,163,184,0.5)" }}>· via web search</span></>
+          }
+        </div>
+      )}
+      {stocks.length === 0 ? (
+        <div className="empty"><div className="empty-icon">📊</div>Nog geen aandelen toegevoegd</div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Ticker</th><th>Naam</th><th>Aandelen</th><th>Gem. Kostprijs</th><th>Live Koers</th><th>Waarde</th><th>P&L (€)</th><th>P&L (%)</th></tr></thead>
+            <tbody>
+              {stocks.map(s => {
+                const price = getPrice(s.ticker, s.avgCost);
+                const value = price * s.shares;
+                const pl = (price - s.avgCost) * s.shares;
+                const plPct = ((price - s.avgCost) / s.avgCost * 100);
+                const manual = isManual(s.ticker);
+                const live = isLive(s.ticker);
+                const isActive = selectedStock === s.id;
+                const isEditing = editingPrice === s.ticker;
+                return (
+                  <>
+                  <tr
+                    key={s.id}
+                    className={`stock-row ${isActive ? "stock-row--active" : ""}`}
+                    onClick={() => setSelectedStock(isActive ? null : s.id)}
+                  >
+                    <td><span className="ticker">{s.ticker}</span></td>
+                    <td style={{ color: "var(--silver2)" }}>{s.name}</td>
+                    <td className="mono">{s.shares}</td>
+                    <td className="mono">{fmt(s.avgCost)}</td>
+                    <td className="mono">
+                      {loading && !manual
+                        ? <span className="loading-spinner" />
+                        : <span className={`price-cell-plain ${manual ? "price-manual" : live ? "price-live" : "price-fallback"}`}>
+                            {fmt(price)}
+                            <span className="price-badge">{manual ? "✎" : live ? "●" : "–"}</span>
+                          </span>
+                      }
+                    </td>
+                    <td className="mono">{fmt(value)}</td>
+                    <td className={`mono ${pl >= 0 ? "pos" : "neg"}`}>{pl >= 0 ? "+" : ""}{fmt(pl)}</td>
+                    <td className={`mono ${plPct >= 0 ? "pos" : "neg"}`}>{plPct >= 0 ? "+" : ""}{fmtNum(plPct)}%</td>
+                  </tr>
+                  {isActive && (
+                    <tr key={`${s.id}-drawer`} className="stock-drawer-row">
+                      <td colSpan={8} style={{ padding: 0 }}>
+                        <div className="stock-drawer">
+                          <div className="stock-drawer-header">
+                            <div>
+                              <span className="ticker" style={{ fontSize: "1rem" }}>{s.ticker}</span>
+                              <span style={{ marginLeft: "0.6rem", color: "var(--silver)", fontSize: "0.85rem" }}>{s.name}</span>
+                            </div>
+                            <button className="drawer-close" onClick={e => { e.stopPropagation(); setSelectedStock(null); }}>✕</button>
+                          </div>
+                          <div className="drawer-actions">
+                            <div className="drawer-section">
+                              <div className="drawer-label">Koers aanpassen</div>
+                              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                                {isEditing ? (
+                                  <input
+                                    className="price-input"
+                                    type="number" step="0.01" autoFocus
+                                    defaultValue={manual ? manualPrices[s.ticker] : ""}
+                                    placeholder={String(prices[s.ticker] ?? s.avgCost)}
+                                    onBlur={e => {
+                                      const v = parseFloat(e.target.value);
+                                      if (!isNaN(v) && v > 0) setManualPrices(p => ({ ...p, [s.ticker]: v }));
+                                      setEditingPrice(null);
+                                    }}
+                                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditingPrice(null); }}
+                                    onClick={e => e.stopPropagation()}
+                                  />
+                                ) : (
+                                  <span style={{ fontFamily: "DM Mono", fontSize: "0.9rem", color: manual ? "var(--gold2)" : "var(--text)" }}>
+                                    {fmt(price)}&nbsp;
+                                    {manual ? <span style={{ fontSize: "0.7rem", color: "var(--gold)", opacity: 0.7 }}>handmatig</span>
+                                            : live  ? <span style={{ fontSize: "0.7rem", color: "var(--green)", opacity: 0.7 }}>live</span>
+                                                    : <span style={{ fontSize: "0.7rem", color: "var(--silver)" }}>kostprijs</span>}
+                                  </span>
+                                )}
+                                <button className="drawer-btn drawer-btn--gold" onClick={e => { e.stopPropagation(); setEditingPrice(s.ticker); }}>✎ Koers invoeren</button>
+                                {manual && <button className="drawer-btn" onClick={e => { e.stopPropagation(); setManualPrices(p => { const n={...p}; delete n[s.ticker]; return n; }); }}>↺ Live herstellen</button>}
+                              </div>
+                            </div>
+                            <div className="drawer-section">
+                              <div className="drawer-label">Acties</div>
+                              <div style={{ display: "flex", gap: "0.5rem" }}>
+                                <button className="drawer-btn drawer-btn--gold" onClick={e => { e.stopPropagation(); setModal({ type: "stock", item: s }); setSelectedStock(null); }}>✎ Bewerken</button>
+                                <button className="drawer-btn drawer-btn--red" onClick={e => { e.stopPropagation(); setConfirmDelete({ type: "stock", id: s.id, name: `${s.ticker} – ${s.name}` }); setSelectedStock(null); }}>✕ Verwijderen</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+
+        </div>
+      )}
+      <div className="summary-card" style={{ maxWidth: 400 }}>
+        <div className="card-label">Portfolio Totaal</div>
+        <div className="card-value">{fmt(stockValue)}</div>
+        {(() => { const totalPL = stocks.reduce((s, st) => s + (getPrice(st.ticker, st.avgCost) - st.avgCost) * st.shares, 0); return <div className={`card-change ${totalPL >= 0 ? "pos" : "neg"}`}>{totalPL >= 0 ? "▲" : "▼"} {fmt(Math.abs(totalPL))} totale P&L</div>; })()}
+      </div>
+    </>
+  );
+  };
+
+  // ─── PROPERTY TAB ─────────────────────────────────────────────────────────
+  const Properties = () => {
+    const [expandedId, setExpandedId] = useState(null);
+    return (
+    <>
+      <div className="section-header">
+        <div className="section-title">🏠 Vastgoed</div>
+        <button className="add-btn" onClick={() => setModal({ type: "property" })}>+ Toevoegen</button>
+      </div>
+      {properties.length === 0 ? (
+        <div className="empty"><div className="empty-icon">🏠</div>Nog geen vastgoed toegevoegd</div>
+      ) : (
+        <div className="property-grid">
+          {properties.map(p => {
+            const totalMortgage = propMortgage(p);
+            const totalMonthly = propMonthly(p);
+            const equity = p.value - totalMortgage;
+            const equityPct = p.value > 0 ? (equity / p.value * 100) : 0;
+            const isExpanded = expandedId === p.id;
+            return (
+              <div key={p.id} className={`property-card ${isExpanded ? "property-card--expanded" : ""}`}>
+                {/* Edit/delete — stop propagation zodat klik op kaart niet triggert */}
+                <div style={{ position: "absolute", top: "1rem", right: "1rem", display: "flex", gap: "0.4rem", zIndex: 2 }}>
+                  <button className="edit-prop" onClick={e => { e.stopPropagation(); setModal({ type: "property", item: p }); }}>✎</button>
+                  <button className="delete-prop" onClick={e => { e.stopPropagation(); setConfirmDelete({ type: "property", id: p.id, name: p.name }); }}>✕</button>
+                </div>
+
+                {/* Klikbaar hoofdgedeelte */}
+                <div className="property-clickable" onClick={() => setExpandedId(isExpanded ? null : p.id)}>
+                  <div className="property-name">{p.name}</div>
+                  <div className="property-address">📍 {p.address}</div>
+                  <div className="property-row"><span className="prop-label">Woningwaarde</span><span className="prop-value">{fmt(p.value)}</span></div>
+                  <div className="property-row"><span className="prop-label">Totale schuld</span><span className="prop-value" style={{ color: "var(--red)" }}>{fmt(totalMortgage)}</span></div>
+                  <div className="property-row"><span className="prop-label">Eigen vermogen</span><span className="prop-value pos">{fmt(equity)}</span></div>
+                  <div className="property-row"><span className="prop-label">Totale maandlast</span><span className="prop-value">{fmt(totalMonthly)}</span></div>
+                  {p.rentalIncome > 0 && <div className="property-row"><span className="prop-label">Huurinkomsten</span><span className="prop-value pos">{fmt(p.rentalIncome)}/mnd</span></div>}
+                  <div className="equity-bar" style={{ marginTop: "1rem" }}><div className="equity-fill" style={{ width: `${Math.max(0, equityPct)}%` }} /></div>
+                  <div className="equity-label"><span>Eigen vermogen {fmtNum(Math.max(0, equityPct))}%</span><span>Schuld {fmtNum(Math.max(0, 100 - equityPct))}%</span></div>
+
+                  {/* Expand hint */}
+                  <div className="property-expand-hint">
+                    <span>{(p.loanParts || []).length} leningdel{(p.loanParts || []).length === 1 ? "" : "en"}</span>
+                    <span className="expand-chevron" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+                  </div>
+                </div>
+
+                {/* LOAN PARTS — alleen tonen als expanded */}
+                {isExpanded && (
+                  <div className="loanparts-section">
+                    <div className="loanparts-title">
+                      <span>Leningdelen ({(p.loanParts || []).length})</span>
+                    </div>
+                    {(p.loanParts || []).length === 0 && (
+                      <div style={{ fontSize: "0.78rem", color: "var(--silver)", textAlign: "center", padding: "0.75rem 0" }}>Nog geen leningdelen toegevoegd</div>
+                    )}
+                    {(p.loanParts || []).map(lp => (
+                      <div key={lp.id} className="loanpart">
+                        <div className="loanpart-header">
+                          <span className="loanpart-label">
+                            {lp.partNumber ? `#${lp.partNumber} ` : ""}{lp.label || "Leningdeel"}
+                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <span className="loanpart-type">{lp.type}</span>
+                            <button className="edit-prop" style={{ fontSize: "0.8rem" }} onClick={e => { e.stopPropagation(); setLoanPartModal({ propertyId: p.id, part: lp }); }}>✎</button>
+                            <button className="delete-prop" style={{ fontSize: "0.8rem" }} onClick={e => { e.stopPropagation(); setProperties(ps => ps.map(px => px.id !== p.id ? px : { ...px, loanParts: px.loanParts.filter(x => x.id !== lp.id) })); }}>✕</button>
+                          </div>
+                        </div>
+                        {lp.originalPrincipal > 0 && <div className="loanpart-row"><span>Oorspronkelijke hoofdsom</span><span>{fmt(lp.originalPrincipal)}</span></div>}
+                        {lp.remainingPrincipal > 0 && <div className="loanpart-row"><span>Restant hoofdsom</span><span>{fmt(lp.remainingPrincipal)}</span></div>}
+                        {lp.originalFixedRatePeriod && <div className="loanpart-row"><span>Oorspr. rentevaste periode</span><span>{lp.originalFixedRatePeriod} jr</span></div>}
+                        {lp.remainingFixedRatePeriod && <div className="loanpart-row"><span>Resterende rentevaste periode</span><span>{lp.remainingFixedRatePeriod} jr</span></div>}
+                        {lp.fixedRateEndDate && <div className="loanpart-row"><span>Einddatum rentevaste periode</span><span>{lp.fixedRateEndDate}</span></div>}
+                        {lp.rate > 0 && <div className="loanpart-row"><span>Rentepercentage (incl. risico-opslag)</span><span>{lp.rate}%</span></div>}
+                        {lp.riskSurcharge > 0 && <div className="loanpart-row"><span>Risico-opslag</span><span>{lp.riskSurcharge}%</span></div>}
+                        {lp.grossMonthlyInterest > 0 && <div className="loanpart-row"><span>Bruto rente per maand</span><span>{fmt(lp.grossMonthlyInterest)}</span></div>}
+                        {lp.deedDate && <div className="loanpart-row"><span>Aktedatum</span><span>{lp.deedDate}</span></div>}
+                        {lp.endDate && <div className="loanpart-row"><span>Einddatum</span><span>{lp.endDate}</span></div>}
+                      </div>
+                    ))}
+                    <button className="add-loanpart-btn" onClick={e => { e.stopPropagation(); setLoanPartModal({ propertyId: p.id }); }}>+ Leningdeel toevoegen</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="summary-grid" style={{ maxWidth: 600 }}>
+        <div className="summary-card"><div className="card-label">Totale Vastgoedwaarde</div><div className="card-value">{fmt(properties.reduce((s, p) => s + p.value, 0))}</div></div>
+        <div className="summary-card"><div className="card-label">Totale Hypotheekschuld</div><div className="card-value" style={{ color: "var(--red)" }}>{fmt(properties.reduce((s, p) => s + propMortgage(p), 0))}</div></div>
+        <div className="summary-card"><div className="card-label">Netto Vastgoed Equity</div><div className="card-value pos">{fmt(propertyEquity)}</div></div>
+      </div>
+    </>
+  );
+  };
+
+  // ─── SAVINGS TAB ──────────────────────────────────────────────────────────
+  const Savings = () => (
+    <>
+      <div className="section-header">
+        <div className="section-title">🏦 Spaargeld</div>
+        <button className="add-btn" onClick={() => setModal({ type: "saving" })}>+ Toevoegen</button>
+      </div>
+      {savings.length === 0 ? <div className="empty"><div className="empty-icon">🏦</div>Geen spaarrekeningen</div> : (
+        <div className="savings-grid">
+          {savings.map(s => (
+            <div key={s.id} className="saving-card">
+              <div style={{ position: "absolute", top: "1rem", right: "1rem", display: "flex", gap: "0.4rem" }}>
+                <button className="edit-prop" onClick={() => setModal({ type: "saving", item: s })}>✎</button>
+                <button className="delete-prop" onClick={() => setConfirmDelete({ type: "saving", id: s.id, name: s.name })}>✕</button>
+              </div>
+              <div className="saving-name">{s.name}</div>
+              <div className="saving-bank">{s.bank}</div>
+              <div className="saving-amount">{fmt(s.amount)}</div>
+              <div className="saving-rate">↑ {s.rate}% rente/jaar · +{fmt(s.amount * s.rate / 100 / 12)}/mnd</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  // ─── METALS TAB ───────────────────────────────────────────────────────────
+  const Metals = () => (
+    <>
+      <div className="section-header">
+        <div className="section-title">✨ Edelmetalen</div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button className="refresh-btn" onClick={loadPrices} disabled={loading}>{loading ? <span className="loading-spinner" /> : "↺"} Prijzen</button>
+          <button className="add-btn" onClick={() => setModal({ type: "metal" })}>+ Toevoegen</button>
+        </div>
+      </div>
+      {metals.length === 0 ? <div className="empty"><div className="empty-icon">✨</div>Geen edelmetalen</div> : (
+        <div className="metals-grid">
+          {metals.map(m => {
+            const key = m.type === "gold" ? "gold_eur_gram" : m.type === "silver" ? "silver_eur_gram" : null;
+            const priceGram = key ? (prices[key] || (m.type === "gold" ? 85 : 0.95)) : 30;
+            const totalVal = m.grams * priceGram;
+            return (
+              <div key={m.id} className="metal-card">
+                <div style={{ position: "absolute", top: "0.75rem", right: "0.75rem", display: "flex", gap: "0.3rem" }}>
+                  <button className="edit-prop" onClick={() => setModal({ type: "metal", item: m })}>✎</button>
+                  <button className="delete-prop" onClick={() => setConfirmDelete({ type: "metal", id: m.id, name: m.name })}>✕</button>
+                </div>
+                <div className="metal-icon">{m.icon}</div>
+                <div className="metal-name">{m.name}</div>
+                <div className="metal-amount">{m.grams}g</div>
+                <div className="metal-value">{fmt(totalVal)}</div>
+                <div className="metal-price">{fmt(priceGram)}/gram</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+
+  const tabs = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "stocks", label: "Aandelen" },
+    { id: "properties", label: "Vastgoed" },
+    { id: "savings", label: "Spaargeld" },
+    { id: "metals", label: "Edelmetalen" },
+  ];
+
+  return (
+    <>
+      <style>{styles}</style>
+      <div className="app">
+        <div className="grain" />
+        <header className="header">
+          <div className="logo">
+            Vermogen
+            <span>PORTFOLIO TRACKER</span>
+          </div>
+          <nav className="nav">
+            {tabs.map(t => (
+              <button key={t.id} className={`nav-btn ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </nav>
+          <div className="header-right">
+            <div className="live-badge" style={priceError ? { borderColor: "rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "var(--red)" } : {}}>
+              <div className="live-dot" style={priceError ? { background: "var(--red)" } : {}} />
+              {priceError ? "OFFLINE" : loading ? "LADEN…" : "LIVE"}
+            </div>
+          </div>
+        </header>
+        <main className="main">
+          {tab === "dashboard" && <Dashboard />}
+          {tab === "stocks" && <Stocks />}
+          {tab === "properties" && <Properties />}
+          {tab === "savings" && <Savings />}
+          {tab === "metals" && <Metals />}
+        </main>
+        {modal && <Modal type={modal.type} item={modal.item} onClose={() => setModal(null)} />}
+        {confirmDelete && <ConfirmDelete type={confirmDelete.type} id={confirmDelete.id} name={confirmDelete.name} onClose={() => setConfirmDelete(null)} />}
+        {loanPartModal && <LoanPartModal propertyId={loanPartModal.propertyId} part={loanPartModal.part} onClose={() => setLoanPartModal(null)} />}
+      </div>
+    </>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
